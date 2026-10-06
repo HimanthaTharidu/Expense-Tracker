@@ -1,20 +1,18 @@
-#  Dockerfile for Node Express Backend
+FROM node:20-alpine AS build
+WORKDIR /app
 
-FROM node:20-alpine
-
-# Create App Directory
-RUN mkdir -p /usr/src/app
-WORKDIR /usr/src/app
-
-# Install Dependencies
 COPY package*.json ./
+RUN npm install
 
-RUN npm install --silent
-
-# Copy app source code
 COPY . .
 
-# Exports
-EXPOSE 5000
+ARG VITE_API_URL
+ENV VITE_API_URL=$VITE_API_URL
 
-CMD ["npm","start"]
+RUN npm run build
+
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
