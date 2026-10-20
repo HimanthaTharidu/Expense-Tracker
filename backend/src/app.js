@@ -6,7 +6,9 @@ import errorHandler from './middleware/errorHandler.js'
 
 const app = express();
 
-app.use(cors({origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173' }));
+app.use(cors({origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+    credentials: true
+ }));
 app.use(express.json());
 if (process.env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
