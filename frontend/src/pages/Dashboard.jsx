@@ -1,59 +1,116 @@
-import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useState, useEffect } from 'react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import api from '../api/axios';
+import Alert from '../components/ui/Alert';
 
-const stats = [
-  { label: 'Total balance', value: '$4,280.00', tone: 'emerald' },
-  { label: 'Monthly spend', value: '$1,240.00', tone: 'blue' },
-  { label: 'Budget left', value: '$760.00', tone: 'amber' },
-];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ffc658'];
 
 const Dashboard = () => {
-  const { user } = useContext(AuthContext);
+  const [summary, setSummary] = useState(null);
+  const [trend, setTrend] = useState([]);
+  const [recent, setRecent] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const now = new Date();
+        const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
+        const [sumRes, trendRes, expRes] = await Promise.all([
+          api.get(`/expenses/summary?month=${monthStr}`),
+          api.get('/expenses/trend?months=6'),
+          api.get('/expenses?limit=5')
+        ]);
+        
+        setSummary(sumRes.data);
+        setTrend(trendRes.data);
+        setRecent(expRes.data.items);
+      } catch (err) {
+        setError('Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  if (loading) return <div>Loading dashboard...</div>;
+  if (error) return <Alert message={error} />;
+  if (!summary) return null;
+
+  const percentUsed = summary.budget > 0 ? (summary.total / summary.budget) * 100 : 0;
+  let progressColor = 'bg-green-500';
+  if (percentUsed >= 100) progressColor = 'bg-red-500';
+  else if (percentUsed >= 80) progressColor = 'bg-yellow-500';
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="text-sm font-medium text-indigo-600">Overview</p>
-          <h1 className="text-3xl font-bold text-gray-900">Welcome back, {user?.name || 'there'}!</h1>
+      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+      
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-sm font-medium text-gray-500">Total Spent This Month</h3>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">${summary.total.toFixed(2)}</p>
         </div>
-      </header>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {stats.map((stat) => (
-          <div key={stat.label} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-gray-500">{stat.label}</p>
-            <p className={`mt-3 text-3xl font-bold text-${stat.tone}-600`}>{stat.value}</p>
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <h3 className="text-sm font-medium text-gray-500">Budget Remaining</h3>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">${Math.max(0, summary.remaining).toFixed(2)}</p>
+          <div className="mt-4 w-full bg-gray-200 rounded-full h-2.5">
+            <div className={`h-2.5 rounded-full ${progressColor}`} style={{ width: `${Math.min(percentUsed, 100)}%` }}></div>
           </div>
-        ))}
+          <p className="mt-1 text-xs text-gray-500">{percentUsed.toFixed(1)}% of ${summary.budget} used</p>
+        </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Recent activity</h2>
-          <ul className="mt-4 space-y-3 text-sm text-gray-600">
-            <li className="flex justify-between border-b border-gray-100 pb-2">
-              <span>Groceries</span>
-              <span className="font-medium text-gray-900">-$72.40</span>
-            </li>
-            <li className="flex justify-between border-b border-gray-100 pb-2">
-              <span>Salary</span>
-              <span className="font-medium text-emerald-600">+$2,600.00</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Utility bills</span>
-              <span className="font-medium text-gray-900">-$118.25</span>
-            </li>
-          </ul>
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-80">
+          <h3 className="text-sm font-medium text-gray-500 mb-4">Spend by Category</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={summary.byCategory} dataKey="total" nameKey="category" cx="50%" cy="50%" outerRadius={80} label>
+                {summary.byCategory.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
         </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 h-80">
+          <h3 className="text-sm font-medium text-gray-500 mb-4">6-Month Trend</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={trend}>
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="total" fill="#4f46e5" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-gray-900">Budget health</h2>
-          <div className="mt-6 h-3 overflow-hidden rounded-full bg-gray-200">
-            <div className="h-full w-3/4 rounded-full bg-indigo-600" />
-          </div>
-          <p className="mt-3 text-sm text-gray-600">76% of your monthly budget has been used.</p>
+      {/* Recent Expenses */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="px-4 py-5 border-b border-gray-200">
+          <h3 className="text-lg font-medium">Recent Expenses</h3>
         </div>
+        <ul className="divide-y divide-gray-200">
+          {recent.map(exp => (
+            <li key={exp._id} className="px-4 py-4 flex justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">{exp.category}</p>
+                <p className="text-sm text-gray-500">{new Date(exp.date).toLocaleDateString()} - {exp.note}</p>
+              </div>
+              <p className="text-sm font-semibold text-gray-900">${exp.amount.toFixed(2)}</p>
+            </li>
+          ))}
+          {recent.length === 0 && <li className="px-4 py-4 text-sm text-gray-500">No recent expenses found.</li>}
+        </ul>
       </div>
     </div>
   );

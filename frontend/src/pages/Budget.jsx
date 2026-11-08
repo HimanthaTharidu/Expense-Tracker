@@ -1,40 +1,69 @@
-const categories = [
-  { name: 'Housing', spent: 820, budget: 1000 },
-  { name: 'Food', spent: 420, budget: 500 },
-  { name: 'Transport', spent: 180, budget: 250 },
-  { name: 'Entertainment', spent: 140, budget: 300 },
-];
+import { useState, useEffect } from 'react';
+import api from '../api/axios';
+import Alert from '../components/ui/Alert';
 
 const Budget = () => {
+  const now = new Date();
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  const [month, setMonth] = useState(currentMonthStr);
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const fetchBudget = async (m) => {
+      try {
+        const res = await api.get(`/budget?month=${m}`);
+        setAmount(res.data.amount || '');
+      } catch (err) {
+        setError('Failed to fetch budget');
+      }
+    };
+    fetchBudget(month);
+  }, [month]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      await api.put('/budget', { month, amount: Number(amount) });
+      setSuccess('Budget saved successfully');
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to save budget');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm font-medium text-indigo-600">Planning</p>
-        <h1 className="text-3xl font-bold text-gray-900">Budget</h1>
-      </div>
-
-      <div className="space-y-4">
-        {categories.map((category) => {
-          const progress = Math.min((category.spent / category.budget) * 100, 100);
-
-          return (
-            <div key={category.name} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="mb-2 flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-900">{category.name}</h2>
-                <span className="text-sm font-medium text-gray-600">${category.spent.toFixed(2)} / ${category.budget.toFixed(2)}</span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className={`h-full rounded-full ${progress >= 85 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Manage Budget</h1>
+      <Alert message={error} />
+      {success && <Alert message={success} type="success" />}
+      
+      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Month (YYYY-MM)</label>
+            <input type="month" required value={month} onChange={e => setMonth(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Budget Amount ($)</label>
+            <input type="number" required min="0" step="1" value={amount} onChange={e => setAmount(e.target.value)}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" />
+          </div>
+          <button type="submit" disabled={loading}
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+            {loading ? 'Saving...' : 'Save Budget'}
+          </button>
+        </form>
       </div>
     </div>
   );
 };
-
 export default Budget;
