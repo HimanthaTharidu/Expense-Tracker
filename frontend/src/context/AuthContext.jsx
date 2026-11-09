@@ -1,38 +1,37 @@
-import { createContext, useState, useEffect } from 'react';
-import api from '../api/axios';
+import { createContext, useState, useEffect } from "react";
+import api from "../api/axios";
 
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(localStorage.getItem("token"));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      api.get('/auth/me')
-        .then(res => {
-          setUser(res.data);
-          setLoading(false);
-        })
-        .catch(() => {
-          setToken(null);
-          setUser(null);
-          setLoading(false);
-        });
-    } else {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) {
       setLoading(false);
+      return;
     }
-  }, [token]);
+
+    api
+      .get("/auth/me")
+      .then((res) => setUser(res.data))
+      .catch(() => {
+        (localStorage.removeItem("token"), setUser(null), setToken(null));
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const login = (userData, jwtToken) => {
-    localStorage.setItem('token', jwtToken);
+    localStorage.setItem("token", jwtToken);
     setToken(jwtToken);
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem("token");
     setToken(null);
     setUser(null);
   };
