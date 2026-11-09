@@ -6,7 +6,12 @@ import Alert from '../components/ui/Alert';
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#ffc658'];
 
 const Dashboard = () => {
-  const [summary, setSummary] = useState(null);
+  const [summary, setSummary] = useState({
+  total: 0,
+  byCategory: [],
+  budget: 0,
+  remaining: 0,
+});
   const [trend, setTrend] = useState([]);
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,9 +29,15 @@ const Dashboard = () => {
           api.get('/expenses?limit=5')
         ]);
         
-        setSummary(sumRes.data);
-        setTrend(trendRes.data);
-        setRecent(expRes.data.items);
+        setSummary({
+          total: 0,
+          budget: 0,
+          remaining: 0,
+          ...(sumRes.data ?? {}),
+          byCategory: Array.isArray(sumRes.data?.byCategory) ? sumRes.data.byCategory : [],
+        });
+        setTrend(Array.isArray(trendRes.data) ? trendRes.data : []);
+        setRecent(Array.isArray(expRes.data?.items) ? expRes.data.items : []);
       } catch (err) {
         setError('Failed to load dashboard data');
       } finally {
@@ -40,6 +51,7 @@ const Dashboard = () => {
   if (error) return <Alert message={error} />;
   if (!summary) return null;
 
+  const byCategory = Array.isArray(summary.byCategory) ? summary.byCategory : [];
   const percentUsed = summary.budget > 0 ? (summary.total / summary.budget) * 100 : 0;
   let progressColor = 'bg-green-500';
   if (percentUsed >= 100) progressColor = 'bg-red-500';
@@ -53,7 +65,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-sm font-medium text-gray-500">Total Spent This Month</h3>
-          <p className="mt-2 text-3xl font-semibold text-gray-900">${summary.total.toFixed(2)}</p>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">${(summary?.total ?? 0).toFixed(2)}</p>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-sm font-medium text-gray-500">Budget Remaining</h3>
@@ -71,8 +83,8 @@ const Dashboard = () => {
           <h3 className="text-sm font-medium text-gray-500 mb-4">Spend by Category</h3>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={summary.byCategory} dataKey="total" nameKey="category" cx="50%" cy="50%" outerRadius={80} label>
-                {summary.byCategory.map((entry, index) => (
+              <Pie data={byCategory} dataKey="total" nameKey="category" cx="50%" cy="50%" outerRadius={80} label>
+                {byCategory.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
